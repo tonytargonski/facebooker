@@ -28,7 +28,7 @@ module Facebooker
       end
       
       def create_facebook_session
-        secure_with_facebook_params! || secure_with_cookies! || secure_with_token!
+        secure_with_facebook_params! || secure_with_cookies! || secure_with_token! || secure_with_fb_connect_cookies!
       end
       
       #this is used to proxy a connection through a rails app so the facebook secret key is not needed
@@ -128,6 +128,26 @@ module Facebooker
 
       def fb_cookie_names
         fb_cookie_names = cookies.keys.select{|k| k.starts_with?(fb_cookie_prefix)}
+      end
+      
+      def fb_connect_cookie_names
+        cookies.keys.select{|k| k.starts_with?(Facebooker.api_key + "_")}
+      end
+      
+      def secure_with_fb_connect_cookies!
+        parsed = {}
+        
+        fb_connect_cookie_names.each { |key| parsed[key[(Facebooker.api_key + "_").size,key.size]] = cookies[key] }
+        
+        #returning gracefully if the cookies aren't set or have expired
+        return unless parsed['session_key'] && parsed['user'] && parsed['expires'] && parsed['ss'] 
+        return unless Time.at(parsed['expires'].to_s.to_f) > Time.now || (parsed['expires'] == "0")          
+        #if we have the unexpired cookies, we'll throw an exception if the sig doesn't verify
+        verify_signature(parsed,cookies[Facebooker.api_key])
+        
+        @facebook_session = new_facebook_session
+        @facebook_session.secure_with!(parsed['session_key'],parsed['user'],parsed['expires'],parsed['ss'])
+        @facebook_session
       end
 
       def secure_with_cookies!
@@ -255,7 +275,12 @@ module Facebooker
       def request_comes_from_facebook?
         request_is_for_a_facebook_canvas? || request_is_facebook_ajax? || request_is_fb_ping?
       end
-
+      
+      def request_has_facebook_connect?
+        # the api_key cookie might be present from non-Connect activity (facebook app cookies?), so check for something more unique to Connect as well
+        !cookies["#{Facebooker::Session.api_key}"].blank? && !cookies["#{Facebooker::Session.api_key}_session_key"].blank?
+      end
+      
       def request_is_fb_ping?
         !params['fb_sig'].blank?
       end
