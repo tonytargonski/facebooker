@@ -160,9 +160,10 @@ class RailsIntegrationTestForFBConnect < Test::Unit::TestCase
   include FBConnectTestHelpers
   
   def setup
-    ENV['FACEBOOK_CANVAS_PATH'] ='facebook_app_name'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'facebook_app_name',
+      'secret_key'       => '7654321' })
     @controller = FBConnectController.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new
@@ -181,9 +182,10 @@ end
 
 class RailsIntegrationTestForNonFacebookControllers < Test::Unit::TestCase
   def setup
-    ENV['FACEBOOK_CANVAS_PATH'] ='facebook_app_name'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'facebook_app_name',
+      'secret_key'       => '7654321' })
     @controller = PlainOldRailsController.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new        
@@ -216,8 +218,9 @@ end
   
 class RailsIntegrationTestForExtendedPermissions < Test::Unit::TestCase
   def setup
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'secret_key'       => '7654321' })
     @controller = ControllerWhichRequiresExtendedPermissions.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new
@@ -255,8 +258,9 @@ end
   
 class RailsIntegrationTestForApplicationInstallation < Test::Unit::TestCase
   def setup
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'secret_key'       => '7654321' })
     @controller = ControllerWhichRequiresApplicationInstallation.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new
@@ -285,10 +289,12 @@ end
 class RailsIntegrationTest < Test::Unit::TestCase
   include FBConnectTestHelpers
   def setup
-    ENV['FACEBOOK_CANVAS_PATH'] ='root'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
-    ActionController::Base.asset_host="http://root.example.com"
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'root',
+      'secret_key'       => '7654321',
+      'set_asset_host_to_callback_url' => true,
+      'callback_url'     => "http://root.example.com" })
     @controller = ControllerWhichRequiresFacebookAuthentication.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new    
@@ -296,10 +302,10 @@ class RailsIntegrationTest < Test::Unit::TestCase
     
   end
   
-   def test_named_route_includes_new_canvas_path_when_in_new_canvas
-      get :named_route_test, facebook_params("fb_sig_in_new_facebook"=>"1")
-      assert_equal "http://apps.facebook.com/root/comments",@response.body
-    end
+  def test_named_route_includes_new_canvas_path_when_in_new_canvas
+    get :named_route_test, facebook_params("fb_sig_in_new_facebook"=>"1")
+    assert_equal "http://apps.facebook.com/root/comments",@response.body
+  end
 
   def test_if_controller_requires_facebook_authentication_unauthenticated_requests_will_redirect
     get :index
@@ -476,6 +482,11 @@ class RailsIntegrationTest < Test::Unit::TestCase
     get :link_test,facebook_params(:fb_sig_in_canvas=>0,:canvas=>false)
     assert !@response.body.match(/root/)
   end
+  
+  def test_default_url_omits_fb_params
+    get :index,facebook_params(:fb_sig_friends=>"overwriteme",:get_param=>"yes")
+    assert_equal "http://apps.facebook.com/root/require_auth?get_param=yes", @controller.send(:default_after_facebook_login_url)
+  end
 
   def test_url_for_links_to_canvas_if_canvas_is_not_set
     get :link_test,facebook_params
@@ -527,9 +538,10 @@ end
 
 class RailsSignatureTest < Test::Unit::TestCase
   def setup
-    ENV['FACEBOOKER_RELATIVE_URL_ROOT'] ='root'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'root',
+      'secret_key'       => '7654321' })
     @controller = ControllerWhichRequiresFacebookAuthentication.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new    
@@ -592,10 +604,10 @@ class RailsHelperTest < Test::Unit::TestCase
   attr_accessor :_erbout
   
   def setup
-    ENV['FACEBOOK_CANVAS_PATH'] ='facebook'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
-    
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'facebook',
+      'secret_key'       => '7654321' })
     @_erbout = ""
     @h = HelperClass.new
     #use an asset path where the canvas path equals the hostname to make sure we handle that case right
@@ -687,7 +699,15 @@ class RailsHelperTest < Test::Unit::TestCase
     assert_equal "<fb:add-section-button section=\"info\" />",@h.fb_add_info_section
   end
 
-  def test_fb_name_with_invalid_key_sizee
+  def test_fb_application_name
+    assert_equal "<fb:application-name />", @h.fb_application_name
+  end
+
+  def test_fb_application_name_with_linked_false
+    assert_equal '<fb:application-name linked="false" />', @h.fb_application_name( :linked => false )
+  end
+
+  def test_fb_name_with_invalid_key_size
     assert_raises(ArgumentError) {@h.fb_name(1234, :sizee => false)}
   end
 
@@ -1052,7 +1072,11 @@ class RailsHelperTest < Test::Unit::TestCase
   def test_fb_logout_link
     assert_equal @h.fb_logout_link("Logout","My URL"),"<a href=\"#\" onclick=\"FB.Connect.logoutAndRedirect(&quot;My URL&quot;);; return false;\">Logout</a>"
   end
-  def test_fb_user_action
+  def test_fb_user_action_with_literal_callback
+    action = Facebooker::Rails::Publisher::UserAction.new
+    assert_equal @h.fb_user_action(action,"message","prompt","function() {alert('hi')}"),"FB.Connect.showFeedDialog(null, null, null, null, null, FB.RequireConnect.promptConnect, function() {alert('hi')}, \"prompt\", {\"value\": \"message\"});"
+  end
+  def test_fb_user_action_with_nil_callback
     action = Facebooker::Rails::Publisher::UserAction.new
     assert_equal @h.fb_user_action(action,"message","prompt"),"FB.Connect.showFeedDialog(null, null, null, null, null, FB.RequireConnect.promptConnect, null, \"prompt\", {\"value\": \"message\"});"
   end
@@ -1402,9 +1426,10 @@ class RailsRequestFormatTest < Test::Unit::TestCase
   end
   
   def setup
-    ENV['FACEBOOK_CANVAS_PATH'] ='facebook_app_name'
-    ENV['FACEBOOK_API_KEY'] = '1234567'
-    ENV['FACEBOOK_SECRET_KEY'] = '7654321'
+    Facebooker.apply_configuration({
+      'api_key'          => '1234567',
+      'canvas_page_name' => 'facebook_app_name',
+      'secret_key'       => '7654321' })
     @controller = FacebookController.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new

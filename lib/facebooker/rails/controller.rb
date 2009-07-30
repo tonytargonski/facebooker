@@ -7,7 +7,6 @@ module Facebooker
       include Facebooker::Rails::ProfilePublisherExtensions
       def self.included(controller)
         controller.extend(ClassMethods)
-        controller.before_filter :set_adapter 
         controller.before_filter :set_facebook_request_format
         controller.helper_attr :facebook_session_parameters
         controller.helper_method :request_comes_from_facebook?
@@ -180,7 +179,11 @@ module Facebooker
       end
 
       def default_after_facebook_login_url
-        url_for(:only_path => false, :overwrite_params => {})
+        omit_keys = ["_method", "format"]
+        options = (params||{}).clone 
+        options = options.reject{|k,v| k.to_s.match(/^fb_sig/) or omit_keys.include?(k.to_s)} 
+        options = options.merge({:only_path => false})
+        url_for(options)
       end
       
       def create_new_facebook_session_and_redirect!
@@ -329,10 +332,6 @@ module Facebooker
         end
       end
       
-      def set_adapter
-        Facebooker.load_adapter(params) if(params[:fb_sig_api_key])
-      end
-
       
       module ClassMethods
         #

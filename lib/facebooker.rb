@@ -36,15 +36,13 @@ module Facebooker
     class << self
 
     def load_configuration(facebooker_yaml_file)
-      if File.exist?(facebooker_yaml_file)
-        if defined? RAILS_ENV
-          @raw_facebooker_configuration = YAML.load_file(ERB.new(File.read(facebooker_yaml_file)).result)[RAILS_ENV]
-        else
-          @raw_facebooker_configuration = YAML.load_file(ERB.new(File.read(facebooker_yaml_file)).result)
-        end
-        Thread.current[:fb_api_config] = @raw_facebooker_configuration unless Thread.current[:fb_api_config]
-        apply_configuration(@raw_facebooker_configuration)
+      return false unless File.exist?(facebooker_yaml_file)
+      @raw_facebooker_configuration = YAML.load(ERB.new(File.read(facebooker_yaml_file)).result)
+      if defined? RAILS_ENV
+        @raw_facebooker_configuration = @raw_facebooker_configuration[RAILS_ENV]
       end
+      Thread.current[:fb_api_config] = @raw_facebooker_configuration unless Thread.current[:fb_api_config]
+      apply_configuration(@raw_facebooker_configuration)
     end
 
     # Sets the Facebook environment based on a hash of options. 
@@ -62,7 +60,10 @@ module Facebooker
         ActionController::Base.asset_host = config['callback_url'] 
       end
       Facebooker.timeout = config['timeout']
-      @facebooker_configuration = config
+
+      @facebooker_configuration = config  # must be set before adapter loaded
+      load_adapter(:fb_sig_api_key => config['api_key'])
+      facebooker_config
     end
 
     def facebooker_config
@@ -78,8 +79,9 @@ module Facebooker
         return
       end
 
-      # Save the old config to handle nested activation
-      old = Thread.current[:fb_api_config].dup rescue false
+      # Save the old config to handle nested activation. If no app context is
+      # set yet, use default app's configuration.
+      old = Thread.current[:fb_api_config] ? Thread.current[:fb_api_config].dup : @raw_facebooker_configuration
 
       if block_given?
         begin
@@ -87,7 +89,7 @@ module Facebooker
           Thread.current[:fb_api_config] = apply_configuration(config)
           yield
         ensure
-          Thread.current[:fb_api_config] = old if old
+          Thread.current[:fb_api_config] = old if old && !old.empty?
           apply_configuration(Thread.current[:fb_api_config])
         end
       end
@@ -186,6 +188,21 @@ require 'facebooker/logging'
 require 'facebooker/model'
 require 'facebooker/parser'
 require 'facebooker/service'
+require 'facebooker/service/base_service'
+#optional HTTP service adapters
+begin
+  require 'facebooker/service/curl_service' 
+rescue LoadError
+  nil
+end
+begin
+  require 'facebooker/service/typhoeus_service'
+  require 'facebooker/service/typhoeus_multi_service'
+rescue LoadError
+  nil
+end
+
+require 'facebooker/service/net_http_service'
 require 'facebooker/server_cache'
 require 'facebooker/data'
 require 'facebooker/admin'

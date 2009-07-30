@@ -204,6 +204,47 @@ class Facebooker::SessionTest < Test::Unit::TestCase
     @session = Facebooker::Session.create(ENV['FACEBOOK_API_KEY'], ENV['FACEBOOK_SECRET_KEY'])
     assert_equal 17876842716, @session.register_template_bundle("{*actor*} did something",nil,nil,[{:text=>"text",:href=>"href"}])
   end
+  
+  def test_can_register_template_bundle_with_short_story
+    one_line = "{*actor*} did something"
+    short_story = { :title => 'title', :body => 'body' }
+    
+    @session = Facebooker::Session.create(ENV['FACEBOOK_API_KEY'], ENV['FACEBOOK_SECRET_KEY'])
+    @session.expects(:post).with(
+      'facebook.feed.registerTemplateBundle',
+      {:one_line_story_templates => [one_line].to_json, :short_story_templates => [short_story].to_json},
+      false
+    )
+    @session.register_template_bundle(one_line, short_story)
+  end
+  
+  def test_can_register_template_bundle_with_short_story_for_several_templates
+    one_line = ["{*actor*} did something", "{*actor*} did something again"]
+    short_story = [{ :title => 'title', :body => 'body' }, { :title => 'title2', :body => 'body2' }]
+    
+    @session = Facebooker::Session.create(ENV['FACEBOOK_API_KEY'], ENV['FACEBOOK_SECRET_KEY'])
+    @session.expects(:post).with(
+      'facebook.feed.registerTemplateBundle',
+      {:one_line_story_templates => one_line.to_json, :short_story_templates => short_story.to_json},
+      false
+    )
+    @session.register_template_bundle(one_line, short_story)
+  end
+  
+  def test_can_register_template_bundle_with_full_story_for_several_templates
+    one_line = ["{*actor*} did something", "{*actor*} did something again"]
+    short_story = [{ :title => 'title', :body => 'body' }, { :title => 'title2', :body => 'body2' }]
+    full_story = { :title => 'title', :body => 'body' }
+    
+    @session = Facebooker::Session.create(ENV['FACEBOOK_API_KEY'], ENV['FACEBOOK_SECRET_KEY'])
+    @session.expects(:post).with(
+      'facebook.feed.registerTemplateBundle',
+      {:one_line_story_templates => one_line.to_json, :short_story_templates => short_story.to_json, :full_story_template => full_story.to_json},
+      false
+    )
+    @session.register_template_bundle(one_line, short_story, full_story)
+  end
+  
   def test_can_publish_user_action
     expect_http_posts_with_responses(publish_user_action_return_xml)
     @session = Facebooker::Session.create(ENV['FACEBOOK_API_KEY'], ENV['FACEBOOK_SECRET_KEY'])
@@ -614,30 +655,6 @@ XML
   end
 end
 
-class PostMethodTest < Test::Unit::TestCase
-
-  def setup
-    Facebooker.use_curl = true
-    Facebooker::Parser.stubs(:parse)
-    @uri = URI.parse("http://api.facebook.com/api")
-    @service = Facebooker::Service.new("a","b","c")
-    @service.stubs("url").returns(@uri)
-  end
-
-  def teardown
-    Facebooker.use_curl = false
-  end
-
-  def test_use_curl_makes_post_with_curl
-    @service.expects(:post_form_with_curl).with(@uri,{:method=>"a"})
-    @service.post(:method=>"a")
-  end
-
-  def test_use_curl_makes_post_file_use_curl_with_multipart
-    @service.expects(:post_form_with_curl).with(@uri,{:method=>"a"},true)
-    @service.post_file(:method=>"a")
-  end
-end
 
 class CanvasSessionTest < Test::Unit::TestCase
   def setup

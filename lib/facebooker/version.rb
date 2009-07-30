@@ -2,7 +2,7 @@ module Facebooker #:nodoc:
   module VERSION #:nodoc:
     MAJOR = 1
     MINOR = 0
-    TINY  = 39
+    TINY  = 45
 
     STRING = [MAJOR, MINOR, TINY].join('.')
   end

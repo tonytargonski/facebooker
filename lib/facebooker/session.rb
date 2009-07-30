@@ -50,6 +50,7 @@ module Facebooker
     class FQLStatementNotIndexable < StandardError; end
     class FQLFunctionDoesNotExist < StandardError; end
     class FQLWrongNumberArgumentsPassedToFunction < StandardError; end
+    class PermissionError < StandardError; end
     class InvalidAlbumId < StandardError; end
     class AlbumIsFull < StandardError; end
     class MissingOrInvalidImageFile < StandardError; end
@@ -300,8 +301,10 @@ module Facebooker
 
     # Takes page_id and uid, returns true if uid is a fan of the page_id
     def is_fan(page_id, uid)
-      post('facebook.pages.isFan', :page_id=>page_id, :uid=>uid)
+      puts "Deprecated. Use Page#user_is_fan? instead"
+      Page.new(page_id).user_is_fan?(uid)
     end    
+
 
     #
     # Returns a proxy object for handling calls to Facebook cached items
@@ -392,14 +395,22 @@ module Facebooker
     # Register a template bundle with Facebook.
     # returns the template id to use to send using this template
     def register_template_bundle(one_line_story_templates,short_story_templates=nil,full_story_template=nil, action_links=nil)
-      parameters = {:one_line_story_templates => Array(one_line_story_templates).to_json}
-
-      parameters[:action_links] = action_links.to_json unless action_links.blank?
-
-      parameters[:short_story_templates] = Array(short_story_templates).to_json unless short_story_templates.blank?
-
-      parameters[:full_story_template] = full_story_template.to_json unless full_story_template.blank?
-
+      templates = ensure_array(one_line_story_templates)
+      parameters = {:one_line_story_templates => templates.to_json}
+      
+      unless action_links.blank?
+        parameters[:action_links] = action_links.to_json
+      end
+      
+      unless short_story_templates.blank?
+        templates = ensure_array(short_story_templates)
+        parameters[:short_story_templates] = templates.to_json
+      end
+      
+      unless full_story_template.blank?
+        parameters[:full_story_template] = full_story_template.to_json
+      end
+      
       post("facebook.feed.registerTemplateBundle", parameters, false)
     end
 
@@ -551,7 +562,7 @@ module Facebooker
     end
 
     def post(method, params = {}, use_session_key = true, &proc)
-      if batch_request?
+      if batch_request? or Facebooker::Logging.skip_api_logging
         post_without_logging(method, params, use_session_key, &proc)
       else
         Logging.log_fb_api(method, params) do
@@ -625,6 +636,10 @@ module Facebooker
           collection
         end.sort.join
         Digest::MD5.hexdigest([raw_string, secret_for_method(params[:method])].join)
+      end
+      
+      def ensure_array(value)
+        value.is_a?(Array) ? value : [value]
       end
   end
 
